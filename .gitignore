@@ -1,0 +1,32 @@
+## Visual Studio 주석 및 캐시 파일들
+.vs/
+MemoryLeaks/
+*.VC.db
+*.opensdf
+*.opendb
+*.sdf
+*.suo
+*.user
+*.aps
+*.ilk
+*.map
+*.pdb
+*.ipch
+
+## 빌드 결과물 (디버그/릴리즈 폴더)
+/[Xx]64/
+/[Dd]ebug/
+/[Rr]elease/
+**/[Xx]64/
+**/[Dd]ebug/
+**/[Rr]elease/
+
+## 빌드 중 생성되는 중간 파일들
+*.obj
+*.pch
+*.tlog
+*.lastbuildstate
+*.recipe
+*.log
+*.exe
+*.lib

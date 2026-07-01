@@ -1,12 +1,34 @@
-﻿// GameServer.cpp : 이 파일에는 'main' 함수가 포함됩니다. 거기서 프로그램 실행이 시작되고 종료됩니다.
-//
-
-#include "pch.h"
+﻿#include "pch.h"
 #include <iostream>
 #include "CorePch.h"
- 
+
+#include <thread>
+#include <mutex>
+#include <windows.h>
+#include "CoreMacro.h"
+#include "ThreadManager.h"
+
+CoreGlobal Core;
+
+void ThreadMain()
+{
+    while (true)
+    {
+        cout << "Hello! I am Thread ... " << LThreadId << endl;
+        this_thread::sleep_for(100ms);
+    }
+}
 
 int main()
 {
-    HelloWorld();
+    for (int32 i = 0; i < 5; i++)
+    {
+        GThreadManager->Launch(ThreadMain);
+    }
+    
+    /*
+        GThreadManager는 CoreGlobal에서 전역으로 선언되어 있는
+        ThreadManager의 포인터 변수이다.
+    */
+    GThreadManager->Join();
 }

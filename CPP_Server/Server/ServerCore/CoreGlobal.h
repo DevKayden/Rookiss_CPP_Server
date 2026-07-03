@@ -13,12 +13,4 @@ extern class ThreadManager* GThreadManager;
 	그런 것들을 CoreGlobal에서 관리
 */
 
-class CoreGlobal
-{
-public:
 
-	CoreGlobal();
-	~CoreGlobal();
-
-
-};

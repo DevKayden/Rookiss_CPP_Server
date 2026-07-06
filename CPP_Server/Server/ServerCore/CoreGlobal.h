@@ -7,6 +7,8 @@
 
 extern class ThreadManager* GThreadManager;
 
+extern class DeadLockProfiler* GDeadLockProfiler;
+
 /*
 	이후 매니저들끼리 순서가 있을 수도 있으니까
 	생성과 삭제 같은 것들.

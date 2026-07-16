@@ -8,41 +8,72 @@
 #include "CoreMacro.h"
 #include "ThreadManager.h"
 
-#include "PlayerManager.h"
-#include "AccountManager.h"
+#include "RefCounting.h"
+#include "Memory.h"
+
+using KnightRef = TSharedPtr<class Knight>;
+using InventoryRef = TSharedPtr<class Inventory>;
+
+class Knight : public RefCountable
+{
+public:
+	Knight()
+	{
+		cout << "Knight()" << endl;
+	}
+	
+	~Knight()
+	{
+		cout << "~Knight()" << endl;
+	}
+
+	void SetTarget(KnightRef target)
+	{
+		_target = target;
+	}
+
+	/*static void* operator new(size_t size)
+	{
+		cout << "new!" << endl;
+		void* ptr = malloc(size);
+		return ptr;
+	}
+	
+	static void operator delete(void* ptr)
+	{
+		cout << "delete!" << endl;
+		free(ptr);
+	}*/
+
+private:
+	KnightRef _target = nullptr;
+	InventoryRef _inventory = nullptr;
+
+};
+
+class Inventory : public RefCountable
+{
+public:
+	Inventory(KnightRef& knight) : _knight(knight)
+	{
+
+	}
+
+private:
+
+	KnightRef& _knight;
+
+};
+
 
 int main()
 {
-    for (int32 i = 0; i < 2; i++)
-    {
-        GThreadManager->Launch([=]
-        {
-            while (true)
-            {
-                cout << "PlayerThenAccount" << endl;
-                GPlayerManager.PlayerThenAccount();
-                this_thread::sleep_for(100ms);
-            }
-        });
-    }
-	
-	for (int32 i = 0; i < 2; i++)
-	{
-		GThreadManager->Launch([=]
-            {
-                while (true)
-                {
-                    cout << "AccountThenPlayer" << endl;
-                    GAccountManager.AccountThenPlayer();
-                    this_thread::sleep_for(100ms);
-                }
-            });
-	}
+	Knight* knight = xnew<Knight>();
+
+	xdelete(knight);
 
 
-    /*
-        GThreadManager는 CoreGlobal에서 전역으로 선언되어 있는
-        ThreadManager의 포인터 변수이다.
-    */
-    GThreadManager->Join();
 }
+	
+
+

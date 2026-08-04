@@ -7,25 +7,20 @@
 
 MemoryPool::MemoryPool(int32 allocSize) : _allocSize(allocSize)
 {
+	::InitializeSListHead(&_header);
 }
 
 MemoryPool::~MemoryPool()
 {
-	while (_queue.empty() == false)
-	{
-		MemoryHeader* header = _queue.front();
-		_queue.pop();
-		::free(header);
-	}
+	while (MemoryHeader* memory = static_cast<MemoryHeader*>(::InterlockedPopEntrySList(&_header)))
+		::_aligned_free(memory);
 }
 
 void MemoryPool::Push(MemoryHeader* ptr)
 {
-	WRITE_LOCK;
 	ptr->allocSize = 0;
 
-	//Pool에 메모리 반납
-	_queue.push(ptr);
+	::InterlockedPushEntrySList(&_header, static_cast<PSLIST_ENTRY>(ptr));
 
 	_allocCount.fetch_sub(1);
 }
@@ -33,36 +28,22 @@ void MemoryPool::Push(MemoryHeader* ptr)
 MemoryHeader* MemoryPool::Pop()
 {
 
-	MemoryHeader* header = nullptr;
-	
-	{// LOCK 생명주기를 위한 괄호
-
-		WRITE_LOCK;
-		//Pool에 여분이 있는지?
-		if (_queue.empty() == false)
-		{
-			// 여분이 있는거니 하나를 꺼내온다.
-			header = _queue.front();
-			_queue.pop();
-
-		}
-
-	}
+	MemoryHeader* memory = static_cast<MemoryHeader*>(::InterlockedPopEntrySList(&_header));
 
 	// 없으면 새로 만든다.
-	if (header == nullptr)
+	if (memory == nullptr)
 	{
-		header = reinterpret_cast<MemoryHeader*>(::malloc(_allocSize));
+		memory = reinterpret_cast<MemoryHeader*>(::_aligned_malloc(_allocSize, SLIST_ALIGNMENT));
 	}
-	else // 디버깅용. else에 들어가면 큐에서 꺼내와서 header에 넣은 거니까
+	else // 디버깅용. else에 들어가면 큐에서 꺼내와서 memory에 넣은 거니까
 	{
 		// MemoryHeader의 allocSize가 0이면 크래시
-		ASSERT_CRASH(header->allocSize == 0);
+		ASSERT_CRASH(memory->allocSize == 0);
 	}
 
-	// 여기까지 왔으면 어쨋든 이제 주소공간의 첫 시작 주소는 header에 들어가 있는거지
+	// 여기까지 왔으면 어쨋든 이제 주소공간의 첫 시작 주소는 memory에 들어가 있는거지
 
 	_allocCount.fetch_add(1);
 
-	return header;
+	return memory;
 }

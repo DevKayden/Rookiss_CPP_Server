@@ -1,5 +1,9 @@
 #pragma once
 
+enum
+{
+	SLIST_ALIGNMENT = 16
+};
 
 /*
 	특정 범위(크기)인 데이터들을 모아서 각 메모리 풀에 넣어줄거임
@@ -16,7 +20,8 @@
 		MemoryHeader
 ---------------------------*/
 
-struct MemoryHeader
+DECLSPEC_ALIGN(SLIST_ALIGNMENT)
+struct MemoryHeader : public SLIST_ENTRY
 {
 	// [MemoryHeader][Data]
 
@@ -49,6 +54,8 @@ struct MemoryHeader
 
 	}
 
+	// SLIST_ENTRY를 상속받았으니 첫번째 멤버변수는 SLIST_ENTRY의 멤버 변수겠지.
+
 	int32 allocSize;
 	// 필요한 정보가 있으면 여기에 이후에 추가
 };
@@ -64,6 +71,8 @@ struct MemoryHeader
 	Pop  -> 메모리가 필요해서 사용하고 싶으면 Pop
 */
 
+
+DECLSPEC_ALIGN(SLIST_ALIGNMENT)
 class MemoryPool
 {
 public:
@@ -75,14 +84,9 @@ public:
 
 
 private:
+	SLIST_HEADER	_header;
 	int32 _allocSize = 0;
 	atomic<int32> _allocCount = 0; // 해당 메모리풀에 몇개가 할당되어 있는지 카운트
-
-	USE_LOCK;
-	queue<MemoryHeader*> _queue;
-	// 해당 큐에는 재사용 가능한 여분이 있으면 넣어줄거임. 메모리가 필요하면 큐가 비어있지않으면 꺼내서 그 공간 쓰고,
-	// 큐가 비어있으면 못 쓰는거?
-
 
 };
 

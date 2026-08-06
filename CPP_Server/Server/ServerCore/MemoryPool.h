@@ -86,7 +86,8 @@ public:
 private:
 	SLIST_HEADER	_header;
 	int32 _allocSize = 0;
-	atomic<int32> _allocCount = 0; // 해당 메모리풀에 몇개가 할당되어 있는지 카운트
+	atomic<int32> _useCount = 0; // 해당 메모리풀에 몇개가 할당되어 있는지 카운트
+	atomic<int32> _reserveCount = 0; // 해당 메모리풀에 저장되어 있는지
 
 };
 

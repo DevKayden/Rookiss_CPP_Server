@@ -22,7 +22,8 @@ void MemoryPool::Push(MemoryHeader* ptr)
 
 	::InterlockedPushEntrySList(&_header, static_cast<PSLIST_ENTRY>(ptr));
 
-	_allocCount.fetch_sub(1);
+	_useCount.fetch_sub(1);
+	_reserveCount.fetch_add(1);
 }
 
 MemoryHeader* MemoryPool::Pop()
@@ -39,11 +40,12 @@ MemoryHeader* MemoryPool::Pop()
 	{
 		// MemoryHeader의 allocSize가 0이면 크래시
 		ASSERT_CRASH(memory->allocSize == 0);
+		_reserveCount.fetch_sub(1);
 	}
 
 	// 여기까지 왔으면 어쨋든 이제 주소공간의 첫 시작 주소는 memory에 들어가 있는거지
 
-	_allocCount.fetch_add(1);
+	_useCount.fetch_add(1);
 
 	return memory;
 }

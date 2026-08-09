@@ -96,6 +96,37 @@ int main()
         ::inet_ntop(AF_INET, &clientAddr.sin_addr, ipAddress, sizeof(ipAddress));
         cout << "Client Connected! IP = " << ipAddress << endl;
 
+
+        //TODO
+        while (true)
+        {
+            // sendBuffer와는 다르게 recvBuffer는 데이터가 얼마나 들어올지 모르기에 크게 잡아야한다.
+            // recv()가 반환하는 것은 실제로 받은 바이트의 크기를 int로 받아준다. -1을 리턴하면 SOCKET_ERROR이다.
+            char recvBuffer[1000];
+            int32 recvLen = ::recv(clientSocket, recvBuffer, sizeof(recvBuffer), 0);
+            if (recvLen <= 0)
+            {
+                int32 errCode = ::WSAGetLastError();
+                cout << "Recv ErrorCode : " << errCode << endl;
+                return 0;
+            }
+
+            cout << "Recv Data! Data = " << recvBuffer << endl;
+            cout << "Recv Data! Len = " << recvLen << endl;
+            
+            // 위에서 recvBuffer에 데이터를 받고, 아래에서 다시 해당 데이터를 그대로 클라로 보내기
+
+            int32 resultCode = ::send(clientSocket, recvBuffer, recvLen, 0);
+            if (resultCode == SOCKET_ERROR)
+            {
+                int32 errCode = ::WSAGetLastError();
+                cout << "Send ErrorCode : " << errCode << endl;
+                return 0;
+            }
+
+        }
+
+
     }
 
 

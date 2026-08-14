@@ -12,6 +12,12 @@
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 
+void HandleError(const char* cause)
+{
+    int32 errCode = ::WSAGetLastError();
+    cout << cause << " ErrorCode : " << errCode << endl;
+
+}
 
 int main()
 {
@@ -20,111 +26,69 @@ int main()
     WSAData wasData;
     if (::WSAStartup(MAKEWORD(2, 2), &wasData) != 0)
         return 0;
-
-
-    // ad : Address Family (AF_INET = IPv4, AF_INET6 = IPv6)
-    // type : TCP(SOCK_STREAM) vs UDP(SOCK_DGRAM)
-    // protocol : 0
-    // return : descriptor
-    SOCKET listenSocket = ::socket(AF_INET, SOCK_STREAM, 0);
+    
+    SOCKET serverSocket = ::socket(AF_INET, SOCK_DGRAM, 0);
     // SOCKET 타입 자체가 Int형이다. 해당 번호에 해당하는 소켓을 이용하라고 OS에 요청하는거.
 
-    if (listenSocket == INVALID_SOCKET) // Socket생성 실패시
+    // TCP와 크게 다른 점은 서버소켓이 하나라는 점이다.
+    if (serverSocket == INVALID_SOCKET) // Socket생성 실패시
     {
-        int32 errCode = ::WSAGetLastError();
-        cout << "Socket ErrorCode : " << errCode << endl;
+        HandleError("Socket");
         return 0;
     }
 
 
-    // 서버 주소 설정 (IP주소 + 포트)
     SOCKADDR_IN serverAddr; //IPv4
     ::memset(&serverAddr, 0, sizeof(serverAddr)); // SOCKADDR_IN 구조체변수 값을 0으로 초기화
     serverAddr.sin_family = AF_INET;
-    serverAddr.sin_addr.s_addr = ::htonl(INADDR_ANY); // 니가 알아서 골라달라는 의미.
-    // 주소를 하나로 지정하면 그 주소로만 되지만, INADDR_ANY로 하면 LoopBack주소도 되고 ipconfig에 나오는 주소로도 연결가능.
-    serverAddr.sin_port = ::htons(7777); // port설정. 서버쪽에서 열어놓은 포트 번호로 지정되어야함. 
+    serverAddr.sin_addr.s_addr = ::htonl(INADDR_ANY);
+    serverAddr.sin_port = ::htons(7777);
 
-    
 
-    // 안내원 폰 개통! 식당의 대표 번호
-    // 소켓에다가 주소를 묶어주는 것, 첫번째 파라미터인 소켓에 두번재 파라미터인 서버 주소를 연동시키는 것임.
-    if (::bind(listenSocket, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
+    if (::bind(serverSocket, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
     {
-        int32 errCode = ::WSAGetLastError();
-        cout << "Bind ErrorCode : " << errCode << endl;
+        HandleError("Bind");
         return 0;
     }
 
-    // 영업 시작 -> 입장가능
-    // 두번째 파라미터인 backlog는 대기열 같은 거임. 꽉찬 경우에 대기열의 최대한도라고 볼 수 있음. 
-    // 이걸 초과하는 애들은 바로 끊어버리는 거지.
-    if (::listen(listenSocket, 10) == SOCKET_ERROR)
-    {
-        int32 errCode = ::WSAGetLastError();
-        cout << "Listen ErrorCode : " << errCode << endl;
-        return 0;
-    }
-
-
-
-    /*----------------------------------------------------------------------
-        여기까지 왔으면 클라에서 connect를 해서 붙는다면, 처리할 준비가 된 것이다.
-    ----------------------------------------------------------------------*/
+    /*
+        TCP로 만들면 bind -> listen -> accept 흐름으로 진행되지만
+        UDP는 bind까지 하면 준비가 끝난다.
+    */
 
     while (true)
     {
-        SOCKADDR_IN clientAddr; //IPv4
+        SOCKADDR_IN clientAddr;
         ::memset(&clientAddr, 0, sizeof(clientAddr));
-        int32 addrlen = sizeof(clientAddr);
+        int32 addrLen = sizeof(clientAddr);
 
-        // 두번째 파라미터의 SOCKADDR은 연결되는 클라리언트의 SOCKET 주소이다.
-        /*
-            accept함수는 SOCKET을 리턴하는데, 앞으로 클라이언트와 데이터 통신을 할때는 이 소켓을 이용하면 된다.
-            위에서 사용한 리슨소켓은 클라이언트와 연결해서 새로운 소켓을 받을 수 있도록 문지기 역할을 하는 거지.
-        */
-        SOCKET clientSocket = ::accept(listenSocket, (SOCKADDR*)&clientAddr, &addrlen);
-        if (clientSocket == INVALID_SOCKET)
+
+        char recvBuffer[1000];
+
+        // 실질적으로 받은 패킷의 바이트 수를 반환. 0이하로 떨어지면 문제가 있는 것
+        // clientAddr에는 나한테 데이터를 보낸 클라의 주소가 들어오게 된다.
+        int32 recvLen = ::recvfrom(serverSocket, recvBuffer, sizeof(recvBuffer), 0,
+            (SOCKADDR*)&clientAddr, &addrLen);
+
+        if (recvLen <= 0)
         {
-            int32 errCode = ::WSAGetLastError();
-            cout << "Accept ErrorCode : " << errCode << endl;
-            return 0;
+            HandleError("RecvFrom");
+            return 0; // 실제로는 서버를 닫는게 아니라 해당하는 클라이언트를 종료시켜줘야겠지.
         }
 
-        // 손님 입장 -> 클라 연결됨
-        char ipAddress[16];
-        ::inet_ntop(AF_INET, &clientAddr.sin_addr, ipAddress, sizeof(ipAddress));
-        cout << "Client Connected! IP = " << ipAddress << endl;
+        cout << "Recv Data! Data = " << recvBuffer << endl;
+        cout << "Recv Data! Len = " << recvLen << endl;
 
+        int32 errorCode = ::sendto(serverSocket, recvBuffer, recvLen, 0,
+            (SOCKADDR*)&clientAddr, sizeof(clientAddr));
 
-        //TODO
-        while (true)
+        if (errorCode == SOCKET_ERROR)
         {
-            // sendBuffer와는 다르게 recvBuffer는 데이터가 얼마나 들어올지 모르기에 크게 잡아야한다.
-            // recv()가 반환하는 것은 실제로 받은 바이트의 크기를 int로 받아준다. -1을 리턴하면 SOCKET_ERROR이다.
-            char recvBuffer[1000];
-            int32 recvLen = ::recv(clientSocket, recvBuffer, sizeof(recvBuffer), 0);
-            if (recvLen <= 0)
-            {
-                int32 errCode = ::WSAGetLastError();
-                cout << "Recv ErrorCode : " << errCode << endl;
-                return 0;
-            }
-
-            cout << "Recv Data! Data = " << recvBuffer << endl;
-            cout << "Recv Data! Len = " << recvLen << endl;
-            
-            // 위에서 recvBuffer에 데이터를 받고, 아래에서 다시 해당 데이터를 그대로 클라로 보내기
-
-            int32 resultCode = ::send(clientSocket, recvBuffer, recvLen, 0);
-            if (resultCode == SOCKET_ERROR)
-            {
-                int32 errCode = ::WSAGetLastError();
-                cout << "Send ErrorCode : " << errCode << endl;
-                return 0;
-            }
-
+            HandleError("SendTo");
+            return 0; // 원래는 프로그램 종료 대신 해당하는 클라를 종료해줘야한다.
         }
+
+        cout << "Send Data! Len = " << recvLen << endl;
 
 
     }

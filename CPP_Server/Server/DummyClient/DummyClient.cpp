@@ -6,6 +6,13 @@
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 
+void HandleError(const char* cause)
+{
+    int32 errCode = ::WSAGetLastError();
+    cout << cause << " ErrorCode : " << errCode << endl;
+
+}
+
 int main()
 {
     //WinSock 라이브러리를 사용하려면, 라이브러리 초기화를 해줘야한다.
@@ -28,7 +35,7 @@ int main()
     // type : TCP(SOCK_STREAM) vs UDP(SOCK_DGRAM)
     // protocol : 0
     // return : descriptor
-    SOCKET clientSocket = ::socket(AF_INET, SOCK_STREAM, 0);
+    SOCKET clientSocket = ::socket(AF_INET, SOCK_DGRAM, 0);
     // SOCKET 타입 자체가 Int형이다. 해당 번호에 해당하는 소켓을 이용하라고 OS에 요청하는거.
 
     if (clientSocket == INVALID_SOCKET) // Socket생성 실패시
@@ -52,42 +59,55 @@ int main()
     // network에서는 Big-Endian을 사용하기 때문에 거기에 맞춰주는 듯.
 
 
+    /* 
+    UDP에서는 connet안함. 연결이 없음
+    
     if (::connect(clientSocket, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
     {
         int32 errCode = ::WSAGetLastError();
         cout << "Connect ErrorCode : " << errCode << endl;
         return 0;
-    }
+    }*/
 
     /*----------------------------------------------------------------------
         여기까지 왔으면 연결이 성공함. 이제부터 데이터 송수신이 가능하다. 
     ----------------------------------------------------------------------*/
 
-    cout << "Connected To Server!" << endl;
+    //cout << "Connected To Server!" << endl;
+    
 
     while (true)
     {
         //TODO
         char sendBuffer[100] = "Hello World!";
 
-        int32 resultCode = ::send(clientSocket, sendBuffer, sizeof(sendBuffer), 0);
+        int32 resultCode = ::sendto(clientSocket, sendBuffer, sizeof(sendBuffer), 0,
+            (SOCKADDR*)&serverAddr, sizeof(serverAddr));
+
         if (resultCode == SOCKET_ERROR)
         {
-            int32 errCode = ::WSAGetLastError();
-            cout << "Send ErrorCode : " << errCode << endl;
-            return 0;
+            HandleError("SendTo");
+            return 0; // 원래는 프로그램 종료 대신 해당하는 클라를 종료해줘야한다.
         }
 
         cout << "Send Data! Len = " << sizeof(sendBuffer) << endl;
 
         // 위에서 서버로 데이터 보내고, 다시 서버에서 보낸걸 받기
+        
+        // 지금은 서버에서 보내는 걸 알지만, 일반적으로는 모르기에 recvAddr이라 지칭
+        SOCKADDR_IN recvAddr;
+        ::memset(&recvAddr, 0, sizeof(recvAddr));
+        int32 addrLen = sizeof(recvAddr);
 
         char recvBuffer[1000];
-        int32 recvLen = ::recv(clientSocket, recvBuffer, sizeof(recvBuffer), 0);
+
+        // 이 함수가 호출되면 나한테 데이터를 보낸 주소가 recvAddr에 채워진다.
+        int32 recvLen = ::recvfrom(clientSocket, recvBuffer, sizeof(recvBuffer), 0,
+            (SOCKADDR*)&recvAddr, &addrLen);
+
         if (recvLen <= 0)
         {
-            int32 errCode = ::WSAGetLastError();
-            cout << "Recv ErrorCode : " << errCode << endl;
+            HandleError("RecvFrom");
             return 0;
         }
 

@@ -46,78 +46,7 @@ int main()
     }
 
 
-    // 연결할 목적지 설정 (IP주소 + 포트)
-    SOCKADDR_IN serverAddr; //IPv4
-    ::memset(&serverAddr, 0, sizeof(serverAddr)); // SOCKADDR_IN 구조체변수 값을 0으로 초기화
-    serverAddr.sin_family = AF_INET;
-    //serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1"); << deprecated 오래된거라 사용 권장 x 대신 아래코드로 대체
-    ::inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr); // 127.0.0.1 이 루프백 주소라서 우린 한 컴퓨터에서 클라-서버로 테스트 하니까
-    serverAddr.sin_port = ::htons(7777); // port설정. 서버쪽에서 열어놓은 포트 번호로 지정되어야함. 
     
-    // htons : host to network short -> host에서 network방식의 Endian으로 맞춰주는 함수이다.
-    // Big-Endian vs Little-Endian 방식이 다를 수 있어서 이 함수를 통해서 포트번호를 넣어주는 것이다.
-    // network에서는 Big-Endian을 사용하기 때문에 거기에 맞춰주는 듯.
-
-
-    /* 
-    UDP에서는 connet안함. 연결이 없음
-    
-    if (::connect(clientSocket, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
-    {
-        int32 errCode = ::WSAGetLastError();
-        cout << "Connect ErrorCode : " << errCode << endl;
-        return 0;
-    }*/
-
-    /*----------------------------------------------------------------------
-        여기까지 왔으면 연결이 성공함. 이제부터 데이터 송수신이 가능하다. 
-    ----------------------------------------------------------------------*/
-
-    //cout << "Connected To Server!" << endl;
-    
-
-    while (true)
-    {
-        //TODO
-        char sendBuffer[100] = "Hello World!";
-
-        int32 resultCode = ::sendto(clientSocket, sendBuffer, sizeof(sendBuffer), 0,
-            (SOCKADDR*)&serverAddr, sizeof(serverAddr));
-
-        if (resultCode == SOCKET_ERROR)
-        {
-            HandleError("SendTo");
-            return 0; // 원래는 프로그램 종료 대신 해당하는 클라를 종료해줘야한다.
-        }
-
-        cout << "Send Data! Len = " << sizeof(sendBuffer) << endl;
-
-        // 위에서 서버로 데이터 보내고, 다시 서버에서 보낸걸 받기
-        
-        // 지금은 서버에서 보내는 걸 알지만, 일반적으로는 모르기에 recvAddr이라 지칭
-        SOCKADDR_IN recvAddr;
-        ::memset(&recvAddr, 0, sizeof(recvAddr));
-        int32 addrLen = sizeof(recvAddr);
-
-        char recvBuffer[1000];
-
-        // 이 함수가 호출되면 나한테 데이터를 보낸 주소가 recvAddr에 채워진다.
-        int32 recvLen = ::recvfrom(clientSocket, recvBuffer, sizeof(recvBuffer), 0,
-            (SOCKADDR*)&recvAddr, &addrLen);
-
-        if (recvLen <= 0)
-        {
-            HandleError("RecvFrom");
-            return 0;
-        }
-
-        cout << "Recv Data! Data = " << recvBuffer << endl;
-        cout << "Recv Data! Len = " << recvLen << endl;
-
-
-
-        this_thread::sleep_for(1s);
-    }
     
     // 소켓 리소스 반환
     ::closesocket(clientSocket);

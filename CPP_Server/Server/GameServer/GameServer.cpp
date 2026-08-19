@@ -19,138 +19,151 @@ void HandleError(const char* cause)
 
 }
 
+const int32 BUFSIZE = 1000;
+
+struct Session
+{
+	SOCKET socket = INVALID_SOCKET;
+	char recvBuffer[BUFSIZE] = {};
+	int32 recvBytes = 0;
+	int32 sendBytes = 0;
+};
+
 int main()
 {
-    // WinSock 초기화 (ws2_32 라이브러리 초기화)
-    // 관련 정보가 wsaData에 채워짐
-    WSAData wasData;
-    if (::WSAStartup(MAKEWORD(2, 2), &wasData) != 0)
-        return 0;
-    
-    SOCKET listenSocket = ::socket(AF_INET, SOCK_STREAM, 0);
-    if (listenSocket == INVALID_SOCKET) // Socket생성 실패시
-    {
-        HandleError("Socket");
-        return 0;
-    }
+	WSAData wsaData;
+	if (::WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+		return 0;
 
-    // 블로킹(blocking) 소켓
-    // accept->접속한 클라가 있을 때
-    // connet->서버 접속 성공했을 때
-    // send, sendto->요청한 데이터를 송신 버퍼에 복사했을 때
-    // recv, recvfrom->수신 버퍼에 도착한 데이터가 있고, 이를 유저레벨 버퍼에 복사했을 때
+	SOCKET listenSocket = ::socket(AF_INET, SOCK_STREAM, 0);
+	if (listenSocket == INVALID_SOCKET)
+		return 0;
 
-    // ioctlsocket()함수
-    // 논블로킹 방식으로 바꾸기 위해서 사용하는 함수이다.
+	u_long on = 1;
+	if (::ioctlsocket(listenSocket, FIONBIO, &on) == INVALID_SOCKET)
+		return 0;
 
-    u_long on = 1;
-    if (::ioctlsocket(listenSocket, FIONBIO, &on) == INVALID_SOCKET)
-        return 0;
+	SOCKADDR_IN serverAddr;
+	::memset(&serverAddr, 0, sizeof(serverAddr));
+	serverAddr.sin_family = AF_INET;
+	serverAddr.sin_addr.s_addr = ::htonl(INADDR_ANY);
+	serverAddr.sin_port = ::htons(7777);
+
+	if (::bind(listenSocket, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
+		return 0;
+
+	if (::listen(listenSocket, SOMAXCONN) == SOCKET_ERROR)
+		return 0;
+
+	cout << "Accept" << endl;
+
+	// Select 모델 = (select 함수가 핵심이 되는)
+	// 소켓 함수 호출이 성공할 시점을 미리 알 수 있다!
+	// 문제 상황)
+	// 수신버퍼에 데이터가 없는데, read 한다거나!
+	// 송신버퍼가 꽉 찼는데, write 한다거나!
+	// - 블로킹 소켓 : 조건이 만족되지 않아서 블로킹되는 상황 예방
+	// - 논블로킹 소켓 : 조건이 만족되지 않아서 불필요하게 반복 체크하는 상황을 예방
+
+	// socket set
+	// 1) 읽기[ 2 ] 쓰기[ ] 예외(OOB)[ ] 관찰 대상 등록
+	// OutOfBand는 send() 마지막 인자 MSG_OOB로 보내는 특별한 데이터
+	// 받는 쪽에서도 recv OOB 세팅을 해야 읽을 수 있음
+	// 2) select(readSet, writeSet, exceptSet); -> 관찰 시작
+	// 3) 적어도 하나의 소켓이 준비되면 리턴 -> 낙오자는 알아서 제거됨
+	// 4) 남은 소켓 체크해서 진행
+
+	// fd_set set;
+	// FD_ZERO : 비운다
+	// ex) FD_ZERO(set);
+	// FD_SET : 소켓 s를 넣는다
+	// ex) FD_SET(s, &set);
+	// FD_CLR : 소켓 s를 제거
+	// ex) FD_CLR(s, &set);
+	// FD_ISSET : 소켓 s가 set에 들어있으면 0이 아닌 값을 리턴한다
 
 
-    SOCKADDR_IN serverAddr;
-    ::memset(&serverAddr, 0, sizeof(serverAddr));
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_addr.s_addr = ::htonl(INADDR_ANY);
-    serverAddr.sin_port = ::htons(7777);
+	vector<Session> sessions;
+	sessions.reserve(100);
 
+	fd_set reads;
+	fd_set writes;
 
-    if (::bind(listenSocket, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
-        return 0;
+	while (true)
+	{
+		// 소켓 셋 초기화
+		FD_ZERO(&reads);
+		FD_ZERO(&writes);
 
-    if (::listen(listenSocket, SOMAXCONN) == SOCKET_ERROR)
-        return 0;
+		// ListenSocket 등록
+		FD_SET(listenSocket, &reads);
 
-    cout << "Accept" << endl;
-
-    // 여기까지는 블로킹과 논블로킹이 다른 것 없지만, 아래부터 달라지게 된다.
-    
-    SOCKADDR_IN clientAddr;
-    int32 addrLen = sizeof(clientAddr);
-
-    // 여기서 달라지는 점
-        /*
-            블로킹 방식에서는 accept이 블로킹 방식이라서 접속한 클라가 있을때 리턴을 되기에,
-            리턴 값이 INVALID_SOCKET이면 문제 상황이 맞다.
-
-            하지만 논블로킹 방식을 한다면, accept이 블로킹 방식이 아니라서 그냥 빠져나와서
-            INVALID_SOCKET이 되어도 문제가 없는 상황일 수 있는 거다.
-
-            그래서 이중 조건문을 사용해서 처리한다.
-            일단 accept이 논블로킹 방식이므로 accept이 성공할때까지 계속해서 accept을 호출해줄 것이고,
-            두번째로는 LastError가 "WSAEWOULDBLOCK"이라면 문제가 아니기에 continue를 해서 다시 반복문을 반복하게 한다.
-        */
-
-    while (true)
-    {
-        SOCKET clientSocket = ::accept(listenSocket, (SOCKADDR*)&clientAddr, &addrLen);
-		if (clientSocket == INVALID_SOCKET)
+		// 소켓 등록
+		for (Session& s : sessions)
 		{
-			// 원래 블록했어야 했는데... 너가 논블로킹으로 하라며?
-			if (::WSAGetLastError() == WSAEWOULDBLOCK)
-				continue;
-
-			// Error
-			break;
+			if (s.recvBytes <= s.sendBytes)
+				FD_SET(s.socket, &reads);
+			else
+				FD_SET(s.socket, &writes);
 		}
 
-        cout << "Client Connected!" << endl;
+		// [옵션] 마지막 timeout 인자 설정 가능
+		int32 retVal = ::select(0, &reads, &writes, nullptr, nullptr);
+		if (retVal == SOCKET_ERROR)
+			break;
+
+		// Listener 소켓 체크
+		if (FD_ISSET(listenSocket, &reads))
+		{
+			SOCKADDR_IN clientAddr;
+			int32 addrLen = sizeof(clientAddr);
+			SOCKET clientSocket = ::accept(listenSocket, (SOCKADDR*)&clientAddr, &addrLen);
+			if (clientSocket != INVALID_SOCKET)
+			{
+				cout << "Client Connected" << endl;
+				sessions.push_back(Session{ clientSocket });
+			}
+		}
+
+		// 나머지 소켓 체크
+		for (Session& s : sessions)
+		{
+			// Read
+			if (FD_ISSET(s.socket, &reads))
+			{
+				int32 recvLen = ::recv(s.socket, s.recvBuffer, BUFSIZE, 0);
+				if (recvLen <= 0)
+				{
+					// TODO : sessions 제거
+					continue;
+				}
+
+				s.recvBytes = recvLen;
+			}
+
+			// Write
+			if (FD_ISSET(s.socket, &writes))
+			{
+				// 블로킹 모드 -> 모든 데이터 다 보냄
+				// 논블로킹 모드 -> 일부만 보낼 수가 있음 (상대방 수신 버퍼 상황에 따라)
+				int32 sendLen = ::send(s.socket, &s.recvBuffer[s.sendBytes], s.recvBytes - s.sendBytes, 0);
+				if (sendLen == SOCKET_ERROR)
+				{
+					// TODO : sessions 제거
+					continue;
+				}
+
+				s.sendBytes += sendLen;
+				if (s.recvBytes == s.sendBytes)
+				{
+					s.recvBytes = 0;
+					s.sendBytes = 0;
+				}
+			}
+		}
+	}
 
 
-        // Recv
-        while (true)
-        {
-            char recvBuffer[1000];
-            int32 recvLen = ::recv(clientSocket, recvBuffer, sizeof(recvBuffer), 0);
-
-            // 여기서도 같은 문제가 발생
-            if (recvLen == SOCKET_ERROR)
-            {
-                // WSAEWOULDBLOCK이라는 에러를 뱉은 것이면 아직 상대쪽에서 보내지 않은 것이므로 문제 상황은 아님
-                if (WSAGetLastError() == WSAEWOULDBLOCK)
-                {
-                    continue;
-                }
-
-                // Error
-                break;
-            }
-            else if (recvLen == 0)
-            {
-                // 연결이 끊긴 거니까
-                break;
-            }
-
-            cout << "Recv Data! Len = " << recvLen << endl;
-
-            //Send
-            while (true)
-            {
-                if (::send(clientSocket, recvBuffer, recvLen, 0) == SOCKET_ERROR)
-                {
-                    if (::WSAGetLastError() == WSAEWOULDBLOCK)
-                    {
-                        continue;
-                    }
-                    //Error
-                    break;
-                }
-
-                cout << "Send Data! Len = " << recvLen << endl;
-                break;
-            }
-
-        }
-    }
-
-    
-
-
-
-    
-
-
-
-    // WinSock 종료
-    ::WSACleanup();
+	// 윈속 종료
+	::WSACleanup();
 }

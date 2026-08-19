@@ -15,6 +15,8 @@ void HandleError(const char* cause)
 
 int main()
 {
+	this_thread::sleep_for(3s);
+
 	WSAData wsaData;
 	if (::WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
 		return 0;

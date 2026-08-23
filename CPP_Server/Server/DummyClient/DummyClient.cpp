@@ -46,7 +46,8 @@ int main()
 			if (::WSAGetLastError() == WSAEISCONN)
 				break;
 			// Error
-			break;
+			this_thread::sleep_for(100ms); // 잠시 대기 후 재시도
+			continue;
 		}
 	}
 

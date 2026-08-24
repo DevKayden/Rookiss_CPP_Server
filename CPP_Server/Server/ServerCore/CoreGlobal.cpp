@@ -4,6 +4,8 @@
 #include "DeadLockProfiler.h"
 #include "Memory.h"
 
+#include "SocketUtils.h"
+
 ThreadManager* GThreadManager = nullptr;
 Memory* GMemory = nullptr;
 DeadLockProfiler* GDeadLockProfiler = nullptr;
@@ -18,6 +20,7 @@ public:
 		GThreadManager = new ThreadManager();
         GMemory = new Memory();
 		GDeadLockProfiler = new DeadLockProfiler();
+		SocketUtils::Init(); // WinSock 초기화
 	}
 
 	~CoreGlobal()
@@ -25,6 +28,7 @@ public:
 		delete GThreadManager;
 		delete GMemory;
 		delete GDeadLockProfiler;
+		SocketUtils::Clear(); // WinSock 날리기
 	}
 
 

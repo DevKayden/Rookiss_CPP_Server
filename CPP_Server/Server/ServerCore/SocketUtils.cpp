@@ -80,6 +80,7 @@ bool SocketUtils::SetTcpNoDelay(SOCKET socket, bool flag)
 }
 
 // ListenSocket의 특성을 ClientSocket에 그대로 적용
+// AcceptEx를 호출할 때, AcceptEx가 accept한 소켓을 업데이트해주는 옵션
 bool SocketUtils::SetUpdateAcceptSocket(SOCKET socket, SOCKET listenSocket)
 {
 	return SetSockOpt(socket, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, listenSocket);

@@ -28,10 +28,11 @@ public:
 	IocpEvent(EventType type);
 
 	void Init();
-	EventType GetType() {return _type;}
 
-protected:
-	EventType _type;
+public:
+	EventType eventType;
+	IocpObjectRef owner; // 이 IocpEvent를 소유한 IocpObject를 가리키는 포인터
+
 
 };
 
@@ -57,6 +58,9 @@ public:
 	리스너에서 RegisterAccept를 호출할때 AcceptEvent를 인자로 받아준다.
 	RegisterAccept를 호출하면, 그안에서 Session을 생성하고, AcceptEvent에 Session을 연결해준다. 
 	그래야지만 나중에 Dispatch를 해서 뽑았을때 어떤 세션인지 알 수 있다.
+
+	즉 IocpEvent는 Overlapped 구조체를 상속받은 구조체이고, IocpObject를 shared_ptr로 들고 있는 구조체이다.
+	AcceptEvent는 IocpEvent를 상속받은 구조체이며, Session을 포인터로 들고 있는 구조체이다.
 */
 
 class AcceptEvent : public IocpEvent
@@ -64,12 +68,10 @@ class AcceptEvent : public IocpEvent
 public:
 	AcceptEvent() : IocpEvent(EventType::Accept) { }
 
-	void		SetSession(Session* session) { _session = session; }
-	Session*	GetSession() { return _session; }
 
-private:
+public:
 	// AcceptEvent가 어떤 Session을 연결했는지 알 수 있도록 Session 포인터를 들고 있음.
-	Session* _session = nullptr; 
+	SessionRef session = nullptr; 
 };
 
 

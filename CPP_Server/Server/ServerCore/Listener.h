@@ -3,6 +3,7 @@
 #include "NetAddress.h"
 
 class AcceptEvent;
+class ServerService;
 
 /*----------------
 	Listener
@@ -23,7 +24,7 @@ public:
 public:
 	/* 외부에서 사용 */
 	// 리스너가 리슨을 시작하도록 하는 함수
-	bool StartAccept(NetAddress netAddress);
+	bool StartAccept(ServerServiceRef service);
 	void CloseSocket();
 	
 
@@ -40,7 +41,7 @@ private:
 protected:
 	SOCKET _socket = INVALID_SOCKET; // 리슨 소켓
 	Vector<AcceptEvent*> _acceptEvents;
-
+	ServerServiceRef _service;
 
 };
 

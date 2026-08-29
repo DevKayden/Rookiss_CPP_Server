@@ -24,7 +24,7 @@
 		IocpEvent 내부에서 이게 Read인지 Write인지 구분을 해준다.
 	*/
 
-class IocpObject
+class IocpObject : public enable_shared_from_this<IocpObject>
 {
 public:
 	// IocpObject를 상속받은 클래스는 반드시 GetHandle()과 Dispatch()를 구현해야 한다.
@@ -48,11 +48,8 @@ public:
 
 	HANDLE GetHandle() const { return _iocpHandle; }
 
-	bool Register(class IocpObject* iocpObject);
+	bool Register(IocpObjectRef iocpObject);
 	bool Dispatch(uint32 timeoutMs = INFINITE);
 private:
 	HANDLE _iocpHandle;
 };
-
-// TEMP 이건 임시라서 여기에 만들어준거고 나중에는 여기서 관리하지 않을 거임.
-extern IocpCore GIocpCore;

@@ -2,10 +2,6 @@
 #include "IocpCore.h"
 #include "IocpEvent.h"
 
-// TEMP
-IocpCore GIocpCore;
-
-
 /*----------------
 	IocpCore
 ----------------*/
@@ -22,21 +18,22 @@ IocpCore::~IocpCore()
 	::CloseHandle(_iocpHandle);
 }
 
-bool IocpCore::Register(class IocpObject* iocpObject)
+bool IocpCore::Register(IocpObjectRef iocpObject)
 {
-	return ::CreateIoCompletionPort(iocpObject->GetHandle(), _iocpHandle, /*key*/reinterpret_cast<ULONG_PTR>(iocpObject), 0);
+	return ::CreateIoCompletionPort(iocpObject->GetHandle(), _iocpHandle, /*key*/0, 0);
 }
 
 bool IocpCore::Dispatch(uint32 timeoutMs)
 {
 	DWORD numOfBytes = 0;
-	IocpObject* iocpObject = nullptr;
+	ULONG_PTR key = 0;
 	IocpEvent* iocpEvent = nullptr;
 
 	// 일감이 있는지 확인하고, 일감이 있으면 true를 리턴하고, 일감이 없으면 false를 리턴한다.
-	if (::GetQueuedCompletionStatus(_iocpHandle, OUT & numOfBytes, OUT reinterpret_cast<PULONG_PTR>(&iocpObject), OUT reinterpret_cast<LPOVERLAPPED*>(&iocpEvent), timeoutMs))
+	if (::GetQueuedCompletionStatus(_iocpHandle, OUT & numOfBytes, OUT &key, OUT reinterpret_cast<LPOVERLAPPED*>(&iocpEvent), timeoutMs))
 	{
 		// 함수 리턴이 true이면, iocpObject와 iocpEvent가 유효한 값임을 보장된거다.
+		IocpObjectRef iocpObject = iocpEvent->owner;
 		iocpObject->Dispatch(iocpEvent, numOfBytes);
 		// 일감이 있으면 어떤 iocpObject인지, 어떤 iocpEvent인지 구분해서 Dispatch를 호출해준다.
 	}
@@ -50,6 +47,7 @@ bool IocpCore::Dispatch(uint32 timeoutMs)
 			return false;
 		default:
 			// TODO : 로그 찍기
+			IocpObjectRef iocpObject = iocpEvent->owner;
 			iocpObject->Dispatch(iocpEvent, numOfBytes);
 			break;
 		}

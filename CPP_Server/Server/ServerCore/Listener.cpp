@@ -3,6 +3,7 @@
 #include "SocketUtils.h"
 #include "IocpEvent.h"
 #include "Session.h"
+#include "Service.h"
 
 /*----------------
 	Listener
@@ -21,14 +22,18 @@ Listener::~Listener()
 }
 
 // 리슨 소켓을 생성하고, Completion Port에 등록하고, 소켓 옵션을 설정하는 함수
-bool Listener::StartAccept(NetAddress netAddress)
+bool Listener::StartAccept(ServerServiceRef service)
 {
+	_service = service;
+	if (_service == nullptr)
+		return false;
+
 	_socket = SocketUtils::CreateSocket();
 	if (_socket == INVALID_SOCKET)
 		return false;
 
 	// 소켓을 Completion Port에 등록한다. 실패하면 false를 리턴한다.
-	if (GIocpCore.Register(this) == false)
+	if (_service->GetIocpCore()->Register(shared_from_this()) == false)
 		return false;
 
 	// 이 설정을 안해주면 주소가 겹쳐서 서버가 실행이 안될 수 있다. (특히 서버를 재시작할 때)
@@ -39,7 +44,7 @@ bool Listener::StartAccept(NetAddress netAddress)
 		return false;
 
 	// 해당 소켓에 IP주소를 바인딩한다. 실패하면 false를 리턴한다.
-	if (SocketUtils::Bind(_socket, netAddress) == false)
+	if (SocketUtils::Bind(_socket, _service->GetNetAddress()) == false)
 		return false;
 
 	// 소켓을 리슨 상태로 만든다. 실패하면 false를 리턴한다.
@@ -47,17 +52,20 @@ bool Listener::StartAccept(NetAddress netAddress)
 		return false;
 
 	// 많은 동접이 있을때 AcceptEx를 여러개 예약해두면, 동접이 많아도 AcceptEx가 바로바로 처리할 수 있다.
-	const int32 acceptCount = 1; // 일단은 한개로만 만들어둔다.
+	const int32 acceptCount = _service->GetMaxSessionCount(); // 일단은 한개로만 만들어둔다.
 	for (int32 i = 0; i < acceptCount; i++)
 	{
 		// 여기서 AcceptEx를 호출해서 실질적으로 예약을 해줘야 한다.
 		// AcceptEvent를 생성하고, RegisterAccept를 호출해서 AcceptEx를 예약한다.
 		AcceptEvent* acceptEvent = xnew<AcceptEvent>();
+		// 내부적으로 자신의 shared_ptr을 추출하려면 enable_shared_from_this를 상속받아야 한다.
+		// 즉, IocpObject가 enable_shared_from_this를 상속받게 한다.
+		acceptEvent->owner = shared_from_this(); // AcceptEvent를 소유한 IocpObject를 Listener로 설정한다.
 		_acceptEvents.push_back(acceptEvent); // 나중에 삭제할 수 있도록 Vector에서 관리
 		RegisterAccept(acceptEvent); // 이 함수의 바디에서 실제 AcceptEx를 호출한다.
 	}
 
-	return false;
+	return true;
 }
 
 void Listener::CloseSocket()
@@ -75,7 +83,7 @@ HANDLE Listener::GetHandle()
 void Listener::Dispatch(IocpEvent* iocpEvent, int32 numOfBytes)
 {
 	// EvnetType이 Accept인지 확인하고, Accept이면 ProcessAccept를 호출한다.
-	ASSERT_CRASH(iocpEvent->GetType() == EventType::Accept);
+	ASSERT_CRASH(iocpEvent->eventType == EventType::Accept);
 	AcceptEvent* acceptEvent = static_cast<AcceptEvent*>(iocpEvent);
 	ProcessAccept(acceptEvent); // AcceptEx가 완료되었으므로, ProcessAccept()를 호출해서 세션을 연결해주게 된다.
 	
@@ -89,12 +97,12 @@ void Listener::RegisterAccept(AcceptEvent* acceptEvent)
 	// 리스너에서 RegisterAccept를 호출하면서 Session을 생성한다.
 	// 세션은 풀링해서 미리준비된 애를 꺼내써도 되지만, 당장은 동적할당해서 사용한다.
 	
-	Session* session = xnew<Session>();
+	SessionRef session = _service->CreateSession();
 	// AcceptEvent에다가 Session을 연결해준다. 그래야지만 나중에 Dispatch를 해서 뽑았을때
 	// 어떤 세션을 넘겨줬는지를 알 수 있다.
 
 	acceptEvent->Init();
-	acceptEvent->SetSession(session); //acceptEvent에 Session을 연결해준다.
+	acceptEvent->session = session; //acceptEvent에 Session을 연결해준다.
 
 	DWORD bytesReceived = 0;
 	// 사실 여기서 중요한 인자는 첫번째 인자인 리슨소켓, 두번째 인자인 세션의 소켓, 세번째 인자인 세션의 수신버퍼, 
@@ -127,7 +135,7 @@ void Listener::RegisterAccept(AcceptEvent* acceptEvent)
 void Listener::ProcessAccept(AcceptEvent* acceptEvent)
 {
 	// 어떤 세션에서 AcceptEx가 완료되었는지 알 수 있도록 AcceptEvent에서 Session을 가져온다.
-	Session* session = acceptEvent->GetSession();
+	SessionRef session = acceptEvent->session;
 
 	// AcceptEx가 완료되었으므로, 이제 세션의 소켓을 업데이트해주어야 한다.
 	// AcceptEx를 호출할 때, 세션의 소켓을 업데이트해주지 않으면, 세션의 소켓은 INVALID_SOCKET 상태로 남아있게 된다.

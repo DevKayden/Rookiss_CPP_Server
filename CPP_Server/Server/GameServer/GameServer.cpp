@@ -1,12 +1,61 @@
-ï»¿// GameServer.cpp : ì´ íŒŒì¼ì—ëŠ” 'main' í•¨ìˆ˜ê°€ í¬í•¨ë©ë‹ˆë‹¤. ê±°ê¸°ì„œ í”„ë¡œê·¸ë¨ ì‹¤í–‰ì´ ì‹œì‘ë˜ê³  ì¢…ë£Œë©ë‹ˆë‹¤.
-//
-
 #include "pch.h"
 #include <iostream>
 #include "CorePch.h"
- 
+#include <atomic>
+#include <mutex>
+#include <windows.h>
+#include <future>
+#include "ThreadManager.h"
+
+#include "Service.h"
+#include "Session.h"
+
+
+
+/*
+	ÁøÇà Èå¸§ Áß¿ä!
+
+	1. Listener::StartAccept()¿¡¼­ AcceptEx¸¦ È£ÃâÇØ¼­ ¿¹¾àÀ» ÇØÁØ´Ù. 
+	±×·¯¸é CP°¡ AcceptEx°¡ ¿Ï·áµÇ¸é Listener::Dispatch()¸¦ È£ÃâÇÏ°Ô µÈ´Ù.
+
+	2. ¾²·¹µå¸¦ ¿©·¯°³ »ı¼ºÇØ¼­ GIocpCore.Dispatch()¸¦ È£ÃâÇÏ°Ô ÇÑ´Ù. 
+	±×·³ GetQueuedCompletionStatus()¿¡¼­ ´ë±âÇÏ´Ù°¡, AcceptEx°¡ ¿Ï·áµÇ¸é Listener::Dispatch()¸¦ È£ÃâÇÏ°Ô µÈ´Ù.
+
+	3. Listener::Dispatch()¿¡¼­ AcceptEvent¸¦ °¡Á®¿Í¼­ ProcessAccept()¸¦ È£ÃâÇÑ´Ù.
+
+	4. ProcessAccept()¿¡¼­ ¼¼¼ÇÀ» ¿¬°áÇØÁÖ°í, ´Ù½Ã RegisterAccept()¸¦ È£ÃâÇØ¼­ AcceptEx¸¦ ¿¹¾àÇØÁØ´Ù.
+
+	5. ¾²·¹µåµéÀº °è¼Ó GIocpCore.Dispatch()¸¦ È£ÃâÇÏ°í ÀÖÀ¸¹Ç·Î, AcceptEx°¡ ¿Ï·áµÇ¸é Listener::Dispatch()¸¦ È£ÃâÇÏ°Ô µÈ´Ù.
+*/
+
+class GameSession : public Session
+{
+
+};
 
 int main()
 {
-    HelloWorld();
+	ServerServiceRef service = MakeShared<ServerService>(
+		NetAddress(L"127.0.0.1", 7777),
+		MakeShared<IocpCore>(),
+		MakeShared<Session>, // ÇöÀç´Â ±×³É ¼¼¼ÇÀ» ½¦¾îµåÆ÷ÀÎÅÍ »ı¼º ÇÔ¼öÁö¸¸, ³ªÁß¿¡´Â ¼¼¼Ç ¸Å´ÏÀúµî È°¿ë
+		100);
+
+	
+	ASSERT_CRASH(service->Start());
+
+
+	for (int32 i = 0; i < 5; i++)
+	{
+		GThreadManager->Launch([=]()
+			{
+				while (true)
+				{
+					service->GetIocpCore()->Dispatch();
+				}
+			});
+	}
+
+	GThreadManager->Join();
+
 }

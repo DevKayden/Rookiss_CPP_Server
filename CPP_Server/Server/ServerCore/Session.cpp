@@ -18,6 +18,22 @@ Session::~Session()
 	SocketUtils::Close(_socket);
 }
 
+void Session::Send(BYTE* buffer, int32 len)
+{
+	// 생각할 문제
+	// 1) 버퍼 관리?
+	// 2) sendEvent 관리? 단일? 여러개? WSASend 중첩?
+
+	// TEMP
+	SendEvent* sendEvent = xnew<SendEvent>();
+	sendEvent->owner = shared_from_this(); // ADD_REF
+	sendEvent->buffer.resize(len);
+	::memcpy(sendEvent->buffer.data(), buffer, len);
+
+	WRITE_LOCK;
+	RegisterSend(sendEvent);
+}
+
 void Session::Disconnect(const WCHAR* cause)
 {
 	// 기존의 값이 false면, 실행하지 않고 리턴.
@@ -54,7 +70,7 @@ void Session::Dispatch(IocpEvent* iocpEvent, int32 numOfBytes)
 		ProcessRecv(numOfBytes);
 		break;
 	case EventType::Send:
-		ProcessSend(numOfBytes);
+		ProcessSend(static_cast<SendEvent*>(iocpEvent), numOfBytes);
 		break;
 	default:
 		break;
@@ -107,6 +123,31 @@ void Session::RegisterRecv()
 	}
 }
 
+void Session::RegisterSend(SendEvent* sendEvent)
+{
+	if (IsConnected() == false) // 연결상태 체크
+		return;
+
+	// WSASend할때 사용해야해니까 선언하고 값을 채워준다.
+	WSABUF wsaBuf;
+	wsaBuf.buf = (char*)sendEvent->buffer.data();
+	wsaBuf.len = (ULONG)sendEvent->buffer.size();
+
+	DWORD numOfBytes = 0;
+	if (SOCKET_ERROR == ::WSASend(_socket, &wsaBuf, 1, OUT & numOfBytes, 0, sendEvent, nullptr))
+	{
+		int32 errorCode = ::WSAGetLastError();
+		if (errorCode != WSA_IO_PENDING)
+		{
+			HandleError(errorCode);
+			sendEvent->owner = nullptr; //RELEASE_REF
+			xdelete(sendEvent);
+		}
+	}
+	// 성공을 하면 IOCP에 등록이 되고, 완료가 되면 IocpCore::Dispatch에서 Session::Dispatch를 호출
+	// 그리고 ProcessSend가 호출되는 흐름.
+}
+
 
 void Session::ProcessConnect()
 {
@@ -135,8 +176,8 @@ void Session::ProcessRecv(int32 numOfBytes)
 		return;
 	}
 
-	// TODO
-	cout << "Recv Data Len = " << numOfBytes << endl;
+	// 컨텐츠 코드에서 오버로딩
+	OnRecv(_recvBuffer, numOfBytes);
 
 	// 수신 등록
 	// 리시브에 대한 처리를 했으니, 다시 리시브 등록
@@ -145,8 +186,19 @@ void Session::ProcessRecv(int32 numOfBytes)
 }
 
 
-void Session::ProcessSend(int32 numOfBytes)
+void Session::ProcessSend(SendEvent* sendEvent, int32 numOfBytes)
 {
+	sendEvent->owner = nullptr; // RELEASE_REF
+	xdelete(sendEvent);
+
+	if (numOfBytes == 0)
+	{
+		Disconnect(L"Send 0");
+		return;
+	}
+
+	// 컨텐츠 코드에서 오버로딩
+	OnSend(numOfBytes);
 }
 
 

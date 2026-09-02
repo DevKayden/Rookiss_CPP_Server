@@ -28,6 +28,8 @@ public:
 	virtual ~Session();
 
 public:
+						/* 외부에서 사용 */
+	void				Send(BYTE* buffer, int32 len);
 	void				Disconnect(const WCHAR* cause);
 
 	shared_ptr<Service>	GetService() { return _service.lock(); }
@@ -53,11 +55,11 @@ private:
 						/* 전송 관련 */
 	void				RegisterConnect(); // 지금 당장은 안쓴다. 클라서비스로 동작을 하게 되면 ConnectEx함수를 통해서 IOCP에 등록하는 함수
 	void				RegisterRecv(); 
-	void				RegisterSend();
+	void				RegisterSend(SendEvent* sendEvent);
 
 	void				ProcessConnect();
 	void				ProcessRecv(int32 numOfBytes);
-	void				ProcessSend(int32 numOfBytes);
+	void				ProcessSend(SendEvent* sendEvent, int32 numOfBytes);
 
 	void				HandleError(int32 errorCode);
 
@@ -72,7 +74,7 @@ protected:
 
 public:
 	//TEMP 임시로 리시브버퍼를 여기서 대충 만든다.
-	char _recvBuffer[1000];
+	BYTE _recvBuffer[1000];
 
 
 private:

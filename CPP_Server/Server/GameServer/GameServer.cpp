@@ -30,7 +30,18 @@
 
 class GameSession : public Session
 {
+	virtual int32 OnRecv(BYTE* buffer, int32 len) override
+	{
+		// Echo
+		cout << "OnRecv Len = " << len << endl;
+		Send(buffer, len);
+		return len;
+	}
 
+	virtual void OnSend(int32 len) override
+	{
+		cout << "OnSend Len = " << len << endl;
+	}
 };
 
 int main()
@@ -38,7 +49,7 @@ int main()
 	ServerServiceRef service = MakeShared<ServerService>(
 		NetAddress(L"127.0.0.1", 7777),
 		MakeShared<IocpCore>(),
-		MakeShared<Session>, // 현재는 그냥 세션을 쉐어드포인터 생성 함수지만, 나중에는 세션 매니저등 활용
+		MakeShared<GameSession>, // 현재는 그냥 세션을 쉐어드포인터 생성 함수지만, 나중에는 세션 매니저등 활용
 		100);
 
 	

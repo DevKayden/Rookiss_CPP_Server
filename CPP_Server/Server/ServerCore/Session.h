@@ -30,6 +30,7 @@ public:
 public:
 						/* 외부에서 사용 */
 	void				Send(BYTE* buffer, int32 len);
+	bool				Connect();
 	void				Disconnect(const WCHAR* cause);
 
 	shared_ptr<Service>	GetService() { return _service.lock(); }
@@ -53,11 +54,13 @@ private:
 
 private:
 						/* 전송 관련 */
-	void				RegisterConnect(); // 지금 당장은 안쓴다. 클라서비스로 동작을 하게 되면 ConnectEx함수를 통해서 IOCP에 등록하는 함수
+	bool				RegisterConnect(); // 지금 당장은 안쓴다. 클라서비스로 동작을 하게 되면 ConnectEx함수를 통해서 IOCP에 등록하는 함수
+	bool				RegisterDisconnect();
 	void				RegisterRecv(); 
 	void				RegisterSend(SendEvent* sendEvent);
 
 	void				ProcessConnect();
+	void				ProcessDisconnect();
 	void				ProcessRecv(int32 numOfBytes);
 	void				ProcessSend(SendEvent* sendEvent, int32 numOfBytes);
 
@@ -92,6 +95,8 @@ private:
 
 private:
 						/* IocpEvent 재사용 */
+	ConnectEvent		_connectEvent;
+	DisconnectEvent		_disconnectEvent;
 	RecvEvent			_recvEvent;
 };
 

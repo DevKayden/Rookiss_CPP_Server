@@ -5,6 +5,7 @@ class Session;
 enum class EventType : uint8
 {
 	Connect,
+	Disconnect,
 	Accept,
 	//PreRecv라는 리시브 전 단계에서 0byte를 이용하는 고급 기법을 쓰는게 있다는데 할건지 모른다고 함.
 	Recv,
@@ -47,6 +48,16 @@ class ConnectEvent : public IocpEvent
 {
 public:
 	ConnectEvent() : IocpEvent(EventType::Connect) { }
+};
+
+/*-------------------
+	DisconnetEvent
+-------------------*/
+
+class DisconnectEvent : public IocpEvent
+{
+public:
+	DisconnectEvent() : IocpEvent(EventType::Disconnect) {}
 };
 
 

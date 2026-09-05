@@ -2,6 +2,7 @@
 #include "IocpCore.h"
 #include "IocpEvent.h"
 #include "NetAddress.h"
+#include "RecvBuffer.h"
 
 class Service;
 
@@ -22,6 +23,11 @@ class Session : public IocpObject
 	friend class Listener;
 	friend class IocpCore;
 	friend class Service;
+
+	enum
+	{
+		BUFFER_SIZE = 0x10000, // 64KB
+	};
 
 public:
 	Session();
@@ -75,11 +81,6 @@ protected:
 	virtual void		OnDisconnected() {}
 
 
-public:
-	//TEMP 임시로 리시브버퍼를 여기서 대충 만든다.
-	BYTE _recvBuffer[1000];
-
-
 private:
 	weak_ptr<Service>	_service; // 내부적으로 서비스의 존재를 알아야지만 서비스에 등록할 수 있으니, 들고 있음. 순환을 줄이기 위해서 weakptr이용
 	SOCKET			_socket = INVALID_SOCKET; // 클라이언트 소켓
@@ -89,9 +90,10 @@ private:
 private:
 	USE_LOCK;
 
-	/* 수신 관련 */
+						/* 수신 관련 */
+	RecvBuffer			_recvBuffer;
 
-	/* 송신 관련 */
+						/* 송신 관련 */
 
 private:
 						/* IocpEvent 재사용 */

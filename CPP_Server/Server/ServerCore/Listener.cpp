@@ -108,7 +108,7 @@ void Listener::RegisterAccept(AcceptEvent* acceptEvent)
 	// 사실 여기서 중요한 인자는 첫번째 인자인 리슨소켓, 두번째 인자인 세션의 소켓, 세번째 인자인 세션의 수신버퍼, 
 	// 마지막 인자인 acceptEvent의 OVERLAPPED 구조체의 포인터이다.
 	// IocpEvnet는 모두 OVERLAPPED 구조체를 상속받았기 때문에, acceptEvent를 static_cast로 LPOVERLAPPED로 변환해서 넣어주면 된다.
-	if (false == SocketUtils::AcceptEx(_socket, session->GetSocket(), session->_recvBuffer, 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, OUT & bytesReceived, static_cast<LPOVERLAPPED>(acceptEvent)))
+	if (false == SocketUtils::AcceptEx(_socket, session->GetSocket(), session->_recvBuffer.WritePos(), 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, OUT & bytesReceived, static_cast<LPOVERLAPPED>(acceptEvent)))
 	{
 		const int32 errorCode = ::WSAGetLastError();
 		if (errorCode != ERROR_IO_PENDING)
